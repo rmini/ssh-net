@@ -404,11 +404,13 @@ namespace Renci.SshNet
             if (this.OutputStream != null)
             {
                 this.OutputStream.Flush();
+                (this.OutputStream as PipeStream).CloseWrite();
             }
 
             if (this.ExtendedOutputStream != null)
             {
                 this.ExtendedOutputStream.Flush();
+                (this.ExtendedOutputStream as PipeStream).CloseWrite();
             }
 
             this._asyncResult.IsCompleted = true;

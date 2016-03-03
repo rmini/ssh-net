@@ -49,6 +49,12 @@
         private bool _isFlushed;
 
         /// <summary>
+        /// Indicates that the input stream has been closed and no more
+        /// data will be written to the output stream.
+        /// </summary>
+        private bool _isWriteClosed;
+
+        /// <summary>
         /// Maximum number of bytes to store in the buffer.
         /// </summary>
         private long _maxBufferLength = 200 * 1024 * 1024;
@@ -198,8 +204,8 @@
         /// <returns><c>True</c> if data available; otherwise<c>false</c>.</returns>
         private bool ReadAvailable(int count)
         {
-            return (this.Length >= count || this._isFlushed) &&
-                   (this.Length >= (count + 1) || !this.BlockLastReadBuffer);
+            return ((this.Length >= count || this._isFlushed) &&
+                    (this.Length >= (count + 1) || !this.BlockLastReadBuffer)) || this._isWriteClosed;
         }
 
         ///<summary>
@@ -222,6 +228,8 @@
                 throw new ArgumentException("The sum of offset and count is greater than the buffer length. ");
             if (offset < 0 || count < 0)
                 throw new ArgumentOutOfRangeException("offset", "offset or count is negative.");
+            if (_isWriteClosed)
+                throw new ObjectDisposedException("PipeStream", "Write() called after CloseWrite()");
             if (count == 0)
                 return;
 
@@ -240,6 +248,17 @@
                 }
 
                 Monitor.Pulse(this._buffer); // signal that write has occurred
+            }
+        }
+
+        /// <summary>
+        /// Closes stream for writing and makes blocked reads return
+        /// </summary>
+        public void CloseWrite() 
+        {
+            lock (this._buffer) {
+                _isWriteClosed = true;
+                Monitor.Pulse(this._buffer);
             }
         }
 
@@ -306,6 +325,21 @@
         {
             get { return 0; }
             set { throw new NotSupportedException(); }
+        }
+
+        #endregion
+
+        #region IDisposable
+
+        private bool _disposed;
+
+        protected override void Dispose(bool disposing) {
+            if (!_disposed) {
+                if (disposing)
+                    CloseWrite();
+                _disposed = true;
+            }
+            base.Dispose(disposing);
         }
 
         #endregion
